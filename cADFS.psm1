@@ -4,6 +4,43 @@
 }
 
 #region DSC Resource: cADFSFarm
+function InstallADFSFarm {
+    <#
+    .Synopsis
+    Performs the configuration of the Active Directory Federation Services farm.
+
+    .Parameter
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscredential] $ServiceCredential,
+        [Parameter(Mandatory = $true)]
+        [pscredential] $InstallCredential,
+        [Parameter(Mandatory = $true)]
+        [pscredential] $CertificateThumbprint,
+        [Parameter(Mandatory = $true)]
+        [pscredential] $DisplayName,
+        [Parameter(Mandatory = $true)]
+        [pscredential] $ServiceName
+
+    )
+
+    $CmdletName = $PSCmdlet.MyInvocation.MyCommand.Name;
+
+    Write-Verbose -Message ('Entering function {0}' -f $CmdletName);
+
+    Install-AdfsFarm `
+        -CertificateThumbprint:$CertificateThumbprint `
+        -Credential:$installationCredential `
+        -FederationServiceDisplayName:$DisplayName `
+        -FederationServiceName:$ServiceName `
+        -OverwriteConfiguration:$true `
+        -ServiceAccountCredential:$serviceAccountCredential;    
+
+    Write-Verbose -Message ('Entering function {0}' -f $CmdletName);
+}
+
 [DscResource()]
 class cADFSFarm {
     <#
@@ -28,7 +65,7 @@ class cADFSFarm {
     The CertificateThumbprint property is the thumbprint of the certificate, located in the local computer's certificate store, that will be bound to the 
     Active Directory Federation Service (ADFS) farm.
     #>
-    [DscProperty()]
+    [DscProperty(Mandatory)]
     [string] $CertificateThumbprint;
 
     <#
@@ -45,14 +82,14 @@ class cADFSFarm {
     [pscredential] $InstallCredential;
 
     [cADFSFarm] Get() {
+        
         Write-Verbose -Message 'Starting retrieving ADFS Farm configuration.';
 
         try {
             $AdfsProperties = Get-AdfsProperties -ErrorAction Stop;
         }
         catch {
-            Write-Verbose -Message ('Error occurred while retrieving ADFS properties: {0}' -f $Error[0].Exception.Message);
-            return $false;
+            Write-Verbose -Message ('Error occurred while retrieving ADFS properties: {0}' -f $global:Error[0].Exception.Message);
         }
 
         Write-Verbose -Message 'Finished retrieving ADFS Farm configuration.';
@@ -62,6 +99,7 @@ class cADFSFarm {
     [System.Boolean] Test() {
         # Assume compliance by default
         $Compliant = $true;
+
 
         Write-Verbose -Message 'Testing for presence of Active Directory Federation Services (ADFS) farm.';
 
@@ -87,6 +125,7 @@ class cADFSFarm {
     }
 
     [void] Set() {
+
         ### If ADFS Farm shoud be present, then go ahead and install it.
         if ($this.Ensure -eq [Ensure]::Present) {
             $AdfsProperties = Get-AdfsProperties;
@@ -119,37 +158,6 @@ class cADFSFarm {
         return;
     }
 }
-
-
-function InstallADFSFarm {
-    <#
-    .Synopsis
-    Performs the configuration
-
-    .Parameter
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [pscredential] $ServiceCredential,
-        [Parameter(Mandatory = $true)]
-        [pscredential] $InstallCredential,
-        [Parameter(Mandatory = $true)]
-        [pscredential] $CertificateThumbprint,
-        [Parameter(Mandatory = $true)]
-        [pscredential] $DisplayName,
-        [Parameter(Mandatory = $true)]
-        [pscredential] $ServiceName
-
-    )
-    Install-AdfsFarm `
-        -CertificateThumbprint:"60E5A409A0011E57FB9C77CBBCB077F4817299D1" `
-        -Credential:$installationCredential `
-        -FederationServiceDisplayName:"HC Lab Corporation" `
-        -FederationServiceName:"adfs-service.hclab.local" `
-        -OverwriteConfiguration:$true `
-        -ServiceAccountCredential:$serviceAccountCredential;            
-}
 #endregion
 
 #region DSC Resource: cADFSRelyingPartyTrust
@@ -164,8 +172,7 @@ class cADFSRelyingPartyTrust {
     [bool] $Property2;
 
     [cADFSRelyingPartyTrust] Get() {
-        $RelyingPartyTrust = [cADFSRelyingPartyTrust]::new();
-        return $RelyingPartyTrust;
+        return $this;
     }
 
     [bool] Test() {
@@ -173,6 +180,7 @@ class cADFSRelyingPartyTrust {
     }
 
     [void] Set() {
+        return;
     }
 }
 #endregion
@@ -180,7 +188,7 @@ class cADFSRelyingPartyTrust {
 #region DSC Resource: cADFSGlobalAuthenticationPolicy
 [DscResource()]
 class cADFSGlobalAuthenticationPolicy {
-    [DscProperty(Key, NotConfigurable)]
+    [DscProperty(Key)]
     [string] $Name = 'Policy';
     
     [DscProperty()]
@@ -218,17 +226,18 @@ class cADFSGlobalAuthenticationPolicy {
 
         $CurrentPolicy = Get-AdfsGlobalAuthenticationPolicy;
 
+        ### Assume that the system is complaint, unless one of the specific settings does not match.
         $Compliance = $true;
 
-        if ($this.PrimaryExtranetAuthenticationProvider -ne $CurrentPolicy.PrimaryExtranetAuthenticationProvider) {
+        if (Compare-Object -ReferenceObject $this.PrimaryExtranetAuthenticationProvider -DifferenceObject $CurrentPolicy.PrimaryExtranetAuthenticationProvider) {
             Write-Verbose -Message 'Primary Extranet Authentication Provider does not match desired configuration.';
             $Compliance = $false;
         }
-        if ($this.PrimaryIntranetAuthenticationProvider -ne $CurrentPolicy.PrimaryIntranetAuthenticationProvider) {
+        if (Compare-Object -ReferenceObject $this.PrimaryIntranetAuthenticationProvider -DifferenceObject $CurrentPolicy.PrimaryIntranetAuthenticationProvider) {
             Write-Verbose -Message 'Primary Intranet Authentication Provider does not match desired configuration.';
             $Compliance = $false;
         }
-        if ($this.AdditionalAuthenticationProvider -ne $CurrentPolicy.AdditionalAuthenticationProvider) {
+        if (Compare-Object -ReferenceObject $this.AdditionalAuthenticationProvider -DifferenceObject $CurrentPolicy.AdditionalAuthenticationProvider) {
             Write-Verbose -Message 'Additional Authentication Provider does not match desired configuration.';
             $Compliance = $false;
         }
@@ -254,7 +263,7 @@ class cADFSGlobalAuthenticationPolicy {
             DeviceAuthenticationEnabled = $this.DeviceAuthenticationEnabled;
             WindowsIntegratedFallbackEnabled = $this.WindowsIntegratedFallbackEnabled;
             };
-        Set-AdfsGlobalAuthenticationPolicy;
+        Set-AdfsGlobalAuthenticationPolicy @GlobalAuthenticationPolicy;
         Write-Verbose -Message 'Finished setting ADFS Global Authentication configuration.';
     }
 }
