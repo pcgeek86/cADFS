@@ -163,15 +163,26 @@ class cADFSFarm {
 #region DSC Resource: cADFSRelyingPartyTrust
 [DscResource()]
 class cADFSRelyingPartyTrust {
+    ### The Name property must be unique to each ADFS Relying Party application in a farm.
     [DscProperty(Key)]
-    [string] $Identifier;
+    [string] $Name;
 
-    # .Description
-    # This property does some cool stuff.
+    ### The identifiers are used to uniquely identify ADFS Relying Party applications.
+    [DscProperty(Mandatory)]
+    [string[]] $Identifiers;
+
+    ### The Notes property allows you to specify helpful notes to other administrators
+    ### to help determine the purpose and configuration behind the Relying Party Trust.
     [DscProperty()]
-    [bool] $Property2;
+    [string] $Notes;
+
+    
 
     [cADFSRelyingPartyTrust] Get() {
+        $RelyingPartyTrust = Get-AdfsRelyingPartyTrust -Name ;
+
+        $this
+
         return $this;
     }
 
@@ -229,6 +240,7 @@ class cADFSGlobalAuthenticationPolicy {
         ### Assume that the system is complaint, unless one of the specific settings does not match.
         $Compliance = $true;
 
+        ### NOTE: Array comparisons must be done using Compare-Object
         if (Compare-Object -ReferenceObject $this.PrimaryExtranetAuthenticationProvider -DifferenceObject $CurrentPolicy.PrimaryExtranetAuthenticationProvider) {
             Write-Verbose -Message 'Primary Extranet Authentication Provider does not match desired configuration.';
             $Compliance = $false;
@@ -250,7 +262,9 @@ class cADFSGlobalAuthenticationPolicy {
             $Compliance = $false;
         }
 
-        Write-Verbose -Message 'All ADFS Global Authentication settings match desired configuration.';
+        if ($Compliance) {
+            Write-Verbose -Message 'All ADFS Global Authentication settings match desired configuration.';
+            }
         return $Compliance;
     }
 
