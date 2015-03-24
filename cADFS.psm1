@@ -301,21 +301,52 @@ class cADFSRelyingPartyTrust {
         ### Build a HashTable of what the configuration settings should look like.
         $RelyingPartyTrust = @{
             IssuanceTransformRules = $this.IssuanceTransformRules;
+            IssuanceAuthorizationRules = $this.IssuanceAuthorizationRules;
             ClaimsProviderName = $this.ClaimsProviderName;
             ProtocolProfile = $this.ProtocolProfile;
             MonitoringEnabled = $this.MonitoringEnabled;
             WsFedEndpoint = $this.WsFederationEndpoint;
             Notes = $this.Notes;
+            Name = $this.Name;
             };
 
-        ### Retrieve the existing
-        $CurrentRelyingPartyTrust = Get-AdfsRelyingPartyTrust -Name $this.Name -ErrorAction Ignore;
-
-        if (!$CurrentRelyingPartyTrust) {
-            ### This code executes if the Relying Party Trust does not exist.
-            Write-Verbose -Message 'The Relying Party Trust does not exist. Creating it'
+        ### Retrieve the existing Relying Party Configuration
+        $CurrentRelyingPartyTrust = $null;
+        try {
+            $CurrentRelyingPartyTrust = Get-AdfsRelyingPartyTrust -Name $this.Name -ErrorAction Stop;
+        }
+        catch {
+            Write-Verbose -Message 'Error occurred while retrieving Relying Party Trust!';
+            throw $PSItem;
+            return;
         }
 
+        #region DSC Resource Absent
+        if ($this.Ensure -eq 'Absent') {
+            if ($CurrentRelyingPartyTrust) {
+                Write-Verbose -Message 'Relying Party Trust should be absent, but it exists. Removing it.';
+                Remove-AdfsRelyingPartyTrust -TargetRelyingParty $CurrentRelyingPartyTrust -ErrorAction Stop;
+            }
+            else {
+                Write-Verbose -Message 'Relying Party Trust does not exist, so we are already compliant. You should never see this message.';
+            }
+            return;
+        }
+        #endregion
+
+        #region DSC Resource Present
+        if (!$CurrentRelyingPartyTrust) {
+            ### This code executes if the Relying Party Trust does not exist.
+            Write-Verbose -Message ('The ADFS Relying Party Trust named {0} does not exist. Creating it.' -f $this.Name);
+            Add-AdfsRelyingPartyTrust @RelyingPartyTrust;
+        }
+        else {
+            Write-Verbose -Message ('The ADFS Relying Party Trust {0} already exists, but its configuration does not match desired state. Updating configuration.' -f $this.Name);
+            Set-AdfsRelyingPartyTrust @RelyingPartyTrust;
+        }
+        #endregion
+
+        Write-Verbose -Message 'Completed the Set() method in the cADFSRelyingPartyTrust DSC Resource.';
         return;
     }
 
@@ -324,6 +355,7 @@ class cADFSRelyingPartyTrust {
         Write-Verbose -Message 'Checking ADFS dependencies was invoked.';
         try {
             Get-WindowsFeature -Name ADFS -ErrorAction Stop;
+            Get-AdfsProperties -ErrorAction Stop;
         }
         catch {
             Write-Verbose -Message 'Error occurred during ADFS dependency checking!';
