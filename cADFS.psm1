@@ -173,7 +173,7 @@ class cADFSRelyingPartyTrust {
 
     ### The identifiers are used to uniquely identify ADFS Relying Party applications.
     [DscProperty(Mandatory)]
-    [string[]] $Identifiers;
+    [string[]] $Identifier;
 
     ### The Notes property allows you to specify helpful notes to other administrators
     ### to help determine the purpose and configuration behind the Relying Party Trust.
@@ -187,11 +187,11 @@ class cADFSRelyingPartyTrust {
     ### Issuance authorization rules allow restriction of access based on user claims.
     ### More information: https://technet.microsoft.com/en-us/library/ee913560.aspx
     [DscProperty()]
-    [string] $IssuanceAuthorizationRules;
+    [string] $IssuanceAuthorizationRules = '';
 
     ### The WS-Federation Endpoint is an optional parameter that specifies the WS-Federation Passive URL for the relying party.
     [DscProperty()]
-    [System.Uri] $WsFederationEndpoint;
+    [string] $WsFederationEndpoint;
 
     ### Enabling Relying Party monitoring enables automatic updating of Relying Party metadata from the Federation Metadata URL.
     ### More information: http://blogs.msdn.com/b/card/archive/2010/06/25/using-federation-metadata-to-establish-a-relying-party-trust-in-ad-fs-2-0.aspx
@@ -225,6 +225,7 @@ class cADFSRelyingPartyTrust {
         $this.MonitoringEnabled = $RelyingPartyTrust.MonitoringEnabled;
         $this.WsFederationEndpoint = $RelyingPartyTrust.WsFedEndpoint;
         $this.Notes = $RelyingPartyTrust.Notes;
+        $this.Identifier = $RelyingPartyTrust.Identifier;
 
         return $this;
     }
@@ -239,10 +240,12 @@ class cADFSRelyingPartyTrust {
         try {
             ### Retrieve the Relying Party Trust using the ADFS PowerShell commands.
             $RelyingPartyTrust = Get-AdfsRelyingPartyTrust -Name $this.Name -ErrorAction Stop;
-            Write-Verbose -Message 'Successfully retrieved Relying Party Trust from ADFS';
+            Write-Verbose -Message ('Successfully retrieved Relying Party Trust from ADFS named {0}' -f $this.Name);
         }
         catch {
-            Write-Verbose -Message ('Relying Party does not exist with name {0}.' -f $this.Name);
+            Write-Verbose -Message ('Error occurred attempting to retrieve Relying Party Trust with name {0}.' -f $this.Name);
+            throw $PSItem;
+            return $false;
         }
 
         #region Setting should be absent
@@ -262,15 +265,19 @@ class cADFSRelyingPartyTrust {
 
         #region Setting should be present
         ### If $this.Ensure -eq 'Present' then the following code will execute
+        if (!$RelyingPartyTrust) {
+            Write-Verbose -Message ('Relying Party does not exist with name {0}.' -f $this.Name);
+            return $false;
+        }
         if ($RelyingPartyTrust.IssuanceAuthorizationRules -ne $this.IssuanceAuthorizationRules) {
             Write-Verbose -Message ('The current IssuanceAuthorizationRules property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.IssuanceAuthorizationRules, $this.IssuanceAuthorizationRules);
             $Compliant = $false;
         }
-        if ($RelyingPartyTrust.IssuanceTransformRules -ne $this.IssuanceTransformRules) {
-            Write-Verbose -Message ('The current IssuanceTransformRules property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.IssuanceTransformRules, $this.IssuanceTransformRules);
+        if (($RelyingPartyTrust.IssuanceTransformRules -replace '\s', '') -ne ($this.IssuanceTransformRules -replace '\s', '')) {
+            Write-Verbose -Message ('The current IssuanceTransformRules property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.IssuanceTransformRules.Trim(), $this.IssuanceTransformRules.Trim());
             $Compliant = $false;
         }
-        if ($RelyingPartyTrust.IssuanceTransformRules -ne $this.IssuanceTransformRules) {
+        if ($RelyingPartyTrust.ClaimsProviderName -ne $this.ClaimsProviderName) {
             Write-Verbose -Message ('The current ClaimsProviderName property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.ClaimsProviderName, $this.ClaimsProviderName);
             $Compliant = $false;
         }
@@ -282,8 +289,12 @@ class cADFSRelyingPartyTrust {
             Write-Verbose -Message ('The current MonitoringEnabled property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.MonitoringEnabled, $this.MonitoringEnabled);
             $Compliant = $false;
         }
-        if ($RelyingPartyTrust.WsFederationEndpoint -ne $this.WsFederationEndpoint) {
-            Write-Verbose -Message ('The current WsFederationEndpoint property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.WsFederationEndpoint, $this.WsFederationEndpoint);
+        if ($RelyingPartyTrust.Identifier -ne $this.Identifier) {
+            Write-Verbose -Message ('The current Identifier property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.Identifier, $this.Identifier);
+            $Compliant = $false;
+        }
+        if ($RelyingPartyTrust.WsFedEndpoint -ne ([System.Uri]$this.WsFederationEndpoint)) {
+            Write-Verbose -Message ('The current WsFederationEndpoint property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.WsFedEndpoint, $this.WsFederationEndpoint);
             $Compliant = $false;
         }
         if ($RelyingPartyTrust.Notes -ne $this.Notes) {
@@ -291,6 +302,9 @@ class cADFSRelyingPartyTrust {
             $Compliant = $false;
         }
 
+        if ($Compliant) {
+            Write-Verbose -Message ('ADFS Relying Party ({0}) is compliant' -f $this.Name);
+        }
         return $Compliant;
         #endregion
     }
@@ -300,15 +314,23 @@ class cADFSRelyingPartyTrust {
 
         ### Build a HashTable of what the configuration settings should look like.
         $RelyingPartyTrust = @{
+            Identifier = $this.Identifier;
             IssuanceTransformRules = $this.IssuanceTransformRules;
-            IssuanceAuthorizationRules = $this.IssuanceAuthorizationRules;
-            ClaimsProviderName = $this.ClaimsProviderName;
             ProtocolProfile = $this.ProtocolProfile;
             MonitoringEnabled = $this.MonitoringEnabled;
-            WsFedEndpoint = $this.WsFederationEndpoint;
+            WsFedEndpoint = [System.Uri]$this.WsFederationEndpoint;
             Notes = $this.Notes;
             Name = $this.Name;
             };
+
+        ### Add the ClaimsProviderName, only if it was specified by the user.
+        if ($this.ClaimsProviderName) {
+            $RelyingPartyTrust.Add('ClaimsProviderName', $this.ClaimsProviderName);
+        }
+
+        if ($this.IssuanceAuthorizationRules) {
+            $RelyingPartyTrust.Add('IssuanceAuthorizationRules', $this.IssuanceAuthorizationRules);
+        }
 
         ### Retrieve the existing Relying Party Configuration
         $CurrentRelyingPartyTrust = $null;
@@ -335,14 +357,15 @@ class cADFSRelyingPartyTrust {
         #endregion
 
         #region DSC Resource Present
+        $this.DisplayHashTable($RelyingPartyTrust);
         if (!$CurrentRelyingPartyTrust) {
             ### This code executes if the Relying Party Trust does not exist.
-            Write-Verbose -Message ('The ADFS Relying Party Trust named {0} does not exist. Creating it.' -f $this.Name);
+            Write-Verbose -Message ('The ADFS Relying Party Trust ({0}) does not exist. Creating it.' -f $this.Name);
             Add-AdfsRelyingPartyTrust @RelyingPartyTrust;
         }
         else {
-            Write-Verbose -Message ('The ADFS Relying Party Trust {0} already exists, but its configuration does not match desired state. Updating configuration.' -f $this.Name);
-            Set-AdfsRelyingPartyTrust @RelyingPartyTrust;
+            Write-Verbose -Message ('The ADFS Relying Party Trust ({0}) already exists, but its configuration does not match desired state. Updating configuration.' -f $this.Name);
+            Set-AdfsRelyingPartyTrust @RelyingPartyTrust -TargetName $RelyingPartyTrust.Name;
         }
         #endregion
 
@@ -365,6 +388,13 @@ class cADFSRelyingPartyTrust {
 
         Write-Verbose -Message 'ADFS dependency checking completed.';
         return $true;
+    }
+
+    [void] DisplayHashTable([HashTable] $Input) {
+        foreach ($Key in $Input.Keys) {
+            Write-Verbose -Message ('{0} :: {1}' -f $Key, $Input[$Key]);
+        }
+        return;
     }
 }
 #endregion
