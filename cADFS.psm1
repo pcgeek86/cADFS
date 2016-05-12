@@ -32,11 +32,11 @@ function InstallADFSFarm {
 
     Install-AdfsFarm `
         -CertificateThumbprint:$CertificateThumbprint `
-        -Credential:$installationCredential `
-        -FederationServiceDisplayName:$DisplayName `
-        -FederationServiceName:$ServiceName `
+        -Credential $installCredential `
+        -FederationServiceDisplayName $DisplayName `
+        -FederationServiceName $ServiceName `
         -OverwriteConfiguration:$true `
-        -ServiceAccountCredential:$serviceAccountCredential;    
+        -ServiceAccountCredential $serviceCredential;    
 
     Write-Verbose -Message ('Entering function {0}' -f $CmdletName);
 }
