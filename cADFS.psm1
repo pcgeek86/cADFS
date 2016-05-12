@@ -134,7 +134,13 @@ class cADFSFarm {
 
         ### If ADFS Farm shoud be present, then go ahead and install it.
         if ($this.Ensure -eq [Ensure]::Present) {
-            $AdfsProperties = Get-AdfsProperties;
+            try{
+                $AdfsProperties = Get-AdfsProperties -ErrorAction stop;
+            }
+            catch {
+                $AdfsProperties = $false
+            }
+
             if (!$AdfsProperties) {
                 Write-Verbose -Message 'Installing Active Directory Federation Services (ADFS) farm.';
                 $AdfsFarm = @{
