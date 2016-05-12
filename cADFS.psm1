@@ -103,7 +103,13 @@ class cADFSFarm {
 
         Write-Verbose -Message 'Testing for presence of Active Directory Federation Services (ADFS) farm.';
 
-        $Properties = Get-AdfsProperties;
+        try {
+            $Properties = Get-AdfsProperties -ErrorAction Stop;
+        }
+        catch {
+            $Compliant = $false;
+            return $Compliant;
+        }
 
         if ($this.Ensure -eq 'Present') {
             Write-Verbose -Message 'Checking for presence of ADFS Farm.';
