@@ -18,11 +18,11 @@ function InstallADFSFarm {
         [Parameter(Mandatory = $true)]
         [pscredential] $InstallCredential,
         [Parameter(Mandatory = $true)]
-        [pscredential] $CertificateThumbprint,
+        [string] $CertificateThumbprint,
         [Parameter(Mandatory = $true)]
-        [pscredential] $DisplayName,
+        [string] $DisplayName,
         [Parameter(Mandatory = $true)]
-        [pscredential] $ServiceName
+        [string] $ServiceName
 
     )
 
@@ -32,11 +32,11 @@ function InstallADFSFarm {
 
     Install-AdfsFarm `
         -CertificateThumbprint:$CertificateThumbprint `
-        -Credential:$installationCredential `
-        -FederationServiceDisplayName:$DisplayName `
-        -FederationServiceName:$ServiceName `
+        -Credential $installCredential `
+        -FederationServiceDisplayName $DisplayName `
+        -FederationServiceName $ServiceName `
         -OverwriteConfiguration:$true `
-        -ServiceAccountCredential:$serviceAccountCredential;    
+        -ServiceAccountCredential $serviceCredential;    
 
     Write-Verbose -Message ('Entering function {0}' -f $CmdletName);
 }
@@ -103,7 +103,13 @@ class cADFSFarm {
 
         Write-Verbose -Message 'Testing for presence of Active Directory Federation Services (ADFS) farm.';
 
-        $Properties = Get-AdfsProperties;
+        try {
+            $Properties = Get-AdfsProperties -ErrorAction Stop;
+        }
+        catch {
+            $Compliant = $false;
+            return $Compliant;
+        }
 
         if ($this.Ensure -eq 'Present') {
             Write-Verbose -Message 'Checking for presence of ADFS Farm.';
@@ -128,7 +134,13 @@ class cADFSFarm {
 
         ### If ADFS Farm shoud be present, then go ahead and install it.
         if ($this.Ensure -eq [Ensure]::Present) {
-            $AdfsProperties = Get-AdfsProperties;
+            try{
+                $AdfsProperties = Get-AdfsProperties -ErrorAction stop;
+            }
+            catch {
+                $AdfsProperties = $false
+            }
+
             if (!$AdfsProperties) {
                 Write-Verbose -Message 'Installing Active Directory Federation Services (ADFS) farm.';
                 $AdfsFarm = @{
