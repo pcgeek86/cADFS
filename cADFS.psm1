@@ -18,11 +18,11 @@ function InstallADFSFarm {
         [Parameter(Mandatory = $true)]
         [pscredential] $InstallCredential,
         [Parameter(Mandatory = $true)]
-        [pscredential] $CertificateThumbprint,
+        [string] $CertificateThumbprint,
         [Parameter(Mandatory = $true)]
-        [pscredential] $DisplayName,
+        [string] $DisplayName,
         [Parameter(Mandatory = $true)]
-        [pscredential] $ServiceName
+        [string] $ServiceName
 
     )
 
