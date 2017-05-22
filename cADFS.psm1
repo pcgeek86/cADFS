@@ -45,7 +45,7 @@ function InstallADFSFarm {
         -OverwriteConfiguration:$true `
         -ServiceAccountCredential $serviceCredential;    
 
-    Write-Verbose -Message ('Entering function {0}' -f $CmdletName);
+    Write-Verbose -Message ('Leaving function {0}' -f $CmdletName);
 }
 
 [DscResource()]
