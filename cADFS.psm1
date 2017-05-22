@@ -11,14 +11,16 @@ function InstallADFSFarm {
 
     .Parameter
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName='CertificateThumbprint')]
     param (
         [Parameter(Mandatory = $true)]
         [pscredential] $ServiceCredential,
         [Parameter(Mandatory = $true)]
         [pscredential] $InstallCredential,
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName='CertificateThumbprint')]
         [string] $CertificateThumbprint,
+        [Parameter(Mandatory = $true, ParameterSetName='CertificateSubject')]
+        [string] $CertificateSubject,
         [Parameter(Mandatory = $true)]
         [string] $DisplayName,
         [Parameter(Mandatory = $true)]
@@ -27,6 +29,11 @@ function InstallADFSFarm {
     )
 
     $CmdletName = $PSCmdlet.MyInvocation.MyCommand.Name;
+
+    if ($PSBoundParameters.CertificateSubject) {
+        $Certificate = Find-Certificate -Subject $CertificateSubject
+        $CertificateThumbprint = $Certificate.Thumbprint
+    }
 
     Write-Verbose -Message ('Entering function {0}' -f $CmdletName);
 
@@ -65,8 +72,15 @@ class cADFSFarm {
     The CertificateThumbprint property is the thumbprint of the certificate, located in the local computer's certificate store, that will be bound to the 
     Active Directory Federation Service (ADFS) farm.
     #>
-    [DscProperty(Mandatory)]
+    [DscProperty()]
     [string] $CertificateThumbprint;
+
+        <#
+    The CertificateSubject property is the subject of the certificate, located in the local computer's certificate store, that will be bound to the 
+    Active Directory Federation Service (ADFS) farm. Used when the certificate thumbprint is not known when generating the MOF.
+    #>
+    [DscProperty()]
+    [string] $CertificateSubject;
 
     <#
     The ServiceCredential property is a PSCredential that represents the username/password that the 
@@ -146,10 +160,17 @@ class cADFSFarm {
                 $AdfsFarm = @{
                     ServiceCredential = $this.ServiceCredential;
                     InstallCredential = $this.InstallCredential;
-                    CertificateThumbprint = $this.CertificateThumbprint;
                     DisplayName = $this.DisplayName;
                     ServiceName = $this.ServiceName;
-                    };
+                };
+                
+                if ($this.CertificateThumbprint) {
+                    $AdfsFarm.Add('CertificateThumbprint',$this.CertificateThumbprint);
+                }
+                elseif ($this.CertificateSubject) {
+                     $AdfsFarm.Add('CertificateSubject',$this.CertificateSubject);
+                }
+
                 InstallADFSFarm @AdfsFarm;
             }
 
@@ -497,6 +518,155 @@ class cADFSGlobalAuthenticationPolicy {
     }
 }
 #endregion
+
+<#
+    .SYNOPSIS
+    Locates one or more certificates using the passed certificate selector parameters.
+
+    If more than one certificate is found matching the selector criteria, they will be
+    returned in order of descending expiration date.
+
+    .PARAMETER Thumbprint
+    The thumbprint of the certificate to find.
+
+    .PARAMETER FriendlyName
+    The friendly name of the certificate to find.
+
+    .PARAMETER Subject
+    The subject of the certificate to find.
+
+    .PARAMETER DNSName
+    The subject alternative name of the certificate to export must contain these values.
+
+    .PARAMETER Issuer
+    The issuer of the certiicate to find.
+
+    .PARAMETER KeyUsage
+    The key usage of the certificate to find must contain these values.
+
+    .PARAMETER EnhancedKeyUsage
+    The enhanced key usage of the certificate to find must contain these values.
+
+    .PARAMETER Store
+    The Windows Certificate Store Name to search for the certificate in.
+    Defaults to 'My'.
+
+    .PARAMETER AllowExpired
+    Allows expired certificates to be returned.
+
+#>
+function Find-Certificate
+{
+    [CmdletBinding()]
+    [OutputType([System.Security.Cryptography.X509Certificates.X509Certificate2[]])]
+    param
+    (
+        [Parameter()]
+        [String]
+        $Thumbprint,
+
+        [Parameter()]
+        [String]
+        $FriendlyName,
+
+        [Parameter()]
+        [String]
+        $Subject,
+
+        [Parameter()]
+        [String[]]
+        $DNSName,
+
+        [Parameter()]
+        [String]
+        $Issuer,
+
+        [Parameter()]
+        [String[]]
+        $KeyUsage,
+
+        [Parameter()]
+        [String[]]
+        $EnhancedKeyUsage,
+
+        [Parameter()]
+        [String]
+        $Store = 'My',
+
+        [Parameter()]
+        [Boolean]
+        $AllowExpired = $false
+    )
+
+    $certPath = Join-Path -Path 'Cert:\LocalMachine' -ChildPath $Store
+
+    if (-not (Test-Path -Path $certPath))
+    {
+        # The Certificte Path is not valid
+        New-InvalidArgumentError `
+            -ErrorId 'CannotFindCertificatePath' `
+            -ErrorMessage ($LocalizedData.CertificatePathError -f $certPath)
+    } # if
+
+    # Assemble the filter to use to select the certificate
+    $certFilters = @()
+    if ($PSBoundParameters.ContainsKey('Thumbprint'))
+    {
+        $certFilters += @('($_.Thumbprint -eq $Thumbprint)')
+    } # if
+
+    if ($PSBoundParameters.ContainsKey('FriendlyName'))
+    {
+        $certFilters += @('($_.FriendlyName -eq $FriendlyName)')
+    } # if
+
+    if ($PSBoundParameters.ContainsKey('Subject'))
+    {
+        $certFilters += @('($_.Subject -eq $Subject)')
+    } # if
+
+    if ($PSBoundParameters.ContainsKey('Issuer'))
+    {
+        $certFilters += @('($_.Issuer -eq $Issuer)')
+    } # if
+
+    if (-not $AllowExpired)
+    {
+        $certFilters += @('(((Get-Date) -le $_.NotAfter) -and ((Get-Date) -ge $_.NotBefore))')
+    } # if
+
+    if ($PSBoundParameters.ContainsKey('DNSName'))
+    {
+        $certFilters += @('(@(Compare-Object -ReferenceObject $_.DNSNameList.Unicode -DifferenceObject $DNSName | Where-Object -Property SideIndicator -eq "=>").Count -eq 0)')
+    } # if
+
+    if ($PSBoundParameters.ContainsKey('KeyUsage'))
+    {
+        $certFilters += @('(@(Compare-Object -ReferenceObject ($_.Extensions.KeyUsages -split ", ") -DifferenceObject $KeyUsage | Where-Object -Property SideIndicator -eq "=>").Count -eq 0)')
+    } # if
+
+    if ($PSBoundParameters.ContainsKey('EnhancedKeyUsage'))
+    {
+        $certFilters += @('(@(Compare-Object -ReferenceObject ($_.EnhancedKeyUsageList.FriendlyName) -DifferenceObject $EnhancedKeyUsage | Where-Object -Property SideIndicator -eq "=>").Count -eq 0)')
+    } # if
+
+    # Join all the filters together
+    $certFilterScript = '(' + ($certFilters -join ' -and ') + ')'
+
+    Write-Verbose -Message ($LocalizedData.SearchingForCertificateUsingFilters `
+        -f $store,$certFilterScript)
+
+    $certs = Get-ChildItem -Path $certPath |
+        Where-Object -FilterScript ([ScriptBlock]::Create($certFilterScript))
+
+    # Sort the certificates
+    if ($certs.count -gt 1)
+    {
+        $certs = $certs | Sort-Object -Descending -Property 'NotAfter'
+    } # if
+
+    return $certs
+} # end function Find-Certificate
 
 return;
 
