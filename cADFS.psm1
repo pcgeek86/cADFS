@@ -170,6 +170,9 @@ class cADFSFarm {
                 elseif ($this.CertificateSubject) {
                      $AdfsFarm.Add('CertificateSubject',$this.CertificateSubject);
                 }
+                else {
+                    Throw "No Certificate details provided, cannot configure ADFS Farm."
+                }
 
                 InstallADFSFarm @AdfsFarm;
             }
