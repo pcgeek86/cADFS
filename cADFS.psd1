@@ -31,5 +31,6 @@
         'cADFSFarm';
         'cADFSGlobalAuthenticationPolicy';
         'cADFSRelyingPartyTrust';
+        'cADFSSamlEndpoint';
         );
 }  
