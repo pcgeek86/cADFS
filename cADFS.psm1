@@ -244,6 +244,10 @@ class cADFSRelyingPartyTrust {
     [DscProperty()]
     [string] $ProtocolProfile;
 
+    ### Specifies the name of an access control policy
+    [DscProperty()]
+    [string] $AccessControlPolicyName;
+
     [cADFSRelyingPartyTrust] Get() {
         $this.CheckDependencies();
 
@@ -265,6 +269,7 @@ class cADFSRelyingPartyTrust {
         $this.WsFederationEndpoint = $RelyingPartyTrust.WsFedEndpoint;
         $this.Notes = $RelyingPartyTrust.Notes;
         $this.Identifier = $RelyingPartyTrust.Identifier;
+        $this.AccessControlPolicyName = $RelyingPartyTrust.AccessControlPolicyName;
 
         return $this;
     }
@@ -340,6 +345,10 @@ class cADFSRelyingPartyTrust {
             Write-Verbose -Message ('The current Notes property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.Notes, $this.Notes);
             $Compliant = $false;
         }
+        if ($RelyingPartyTrust.AccessControlPolicyName -ne $this.AccessControlPolicyName) {
+            Write-Verbose -Message ('The current AccessControlPolicyName property value ({0}) does not match the desired configuration ({1}).' -f $RelyingPartyTrust.AccessControlPolicyName, $this.AccessControlPolicyName);
+            $Compliant = $false;
+        }
 
         if ($Compliant) {
             Write-Verbose -Message ('ADFS Relying Party ({0}) is compliant' -f $this.Name);
@@ -369,6 +378,10 @@ class cADFSRelyingPartyTrust {
 
         if ($this.IssuanceAuthorizationRules) {
             $RelyingPartyTrust.Add('IssuanceAuthorizationRules', $this.IssuanceAuthorizationRules);
+        }
+
+        if ($this.AccessControlPolicyName) {
+            $RelyingPartyTrust.Add('AccessControlPolicyName', $this.AccessControlPolicyName);
         }
 
         ### Retrieve the existing Relying Party Configuration
