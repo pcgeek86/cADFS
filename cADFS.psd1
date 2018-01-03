@@ -3,7 +3,7 @@
     RootModule = 'cADFS.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.0'
+    ModuleVersion = '1.2.0.0'
 
     # ID used to uniquely identify this module
     GUID = '2be44be7-93cf-4c08-8a63-f2a77823ca6b';
@@ -33,4 +33,4 @@
         'cADFSRelyingPartyTrust';
         'cADFSSamlEndpoint';
         );
-}  
+}
