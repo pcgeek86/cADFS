@@ -3,6 +3,19 @@
     Present;
 }
 
+enum SAMLBinding {
+    POST;
+    Redirect;
+    Artifact;
+}
+
+enum SAMLProtocol {
+    SAMLAssertionConsumer;
+    SAMLArtifactResolution;
+    SAMLLogout;
+    SAMLSingleSignOn;
+}
+
 #region DSC Resource: cADFSFarm
 function InstallADFSFarm {
     <#
@@ -407,6 +420,119 @@ class cADFSRelyingPartyTrust {
             Write-Verbose -Message ('{0} :: {1}' -f $Key, $Input[$Key]);
         }
         return;
+    }
+}
+#endregion
+
+#region DSC Resource: cADFSSamlEndpoint
+[DscResource()]
+class cADFSSamlEndpoint {
+    ### Determines whether or not the ADFS SAML Endpoint should exist.
+    [DscProperty()]
+    [Ensure] $Ensure;
+
+    ### The Name property must be unique to each ADFS Relying Party application in a farm.
+    [DscProperty(Key)]
+    [string] $Name;
+
+    ### Binding type (POST, Redirect, Artifact)
+    [DscProperty(Mandatory)]
+    [SAMLBinding] $Binding;
+
+    ### Index of the Endpoint
+    [DscProperty(Key)]
+    [Int] $Index;
+
+    ### Set this Endpoint as the default endpoint
+    [DscProperty()]
+    [Bool] $IsDefault;
+
+    ### Uri of the Endpoint
+    [DscProperty(Mandatory)]
+    [String] $Location;
+
+    ### SAML Protocol that this endpoint implements
+    [DscProperty(Mandatory)]
+    [SAMLProtocol] $Protocol;
+
+    ### Retrieves the current state of the SAML Endpoint of a ADFS Relying Party Trust
+    [cADFSSamlEndpoint] Get() {
+        Write-Verbose -Message 'Starting retrieving list of all current SAML Endpoints for the ADFS Relying Party Trust';
+        $AllCurrentSAMLEndpoints = (Get-AdfsRelyingPartyTrust -Name $this.Name).SamlEndpoints;
+        Write-Verbose -Message 'Finished retrieving list of all current SAML Endpoints for the ADFS Relying Party Trust';
+
+        Write-Verbose -Message 'Starting retrieving SAML Endpoint at Index $this.Index';
+        $CurrentSAMLEndpoint = $AllCurrentSAMLEndpoints | Where-Object { $_.Index -eq $this.Index };
+        Write-Verbose -Message 'Finished retrieving SAML Endpoint at Index $this.Index';
+
+        $this.Binding = $CurrentSAMLEndpoint.Binding;
+        $this.Index = $CurrentSAMLEndpoint.Index;
+        $this.IsDefault = $CurrentSAMLEndpoint.IsDefault;
+        $this.Location = $CurrentSAMLEndpoint.Location;
+        $this.Protocol = $CurrentSAMLEndpoint.Protocol;
+
+        return $this;
+
+    }
+
+    ### Test the validity of the current SAML Endpoint against the desired configuration
+    [bool] Test() {
+        Write-Verbose -Message 'Starting evaluating SAML Endpoint against desired state.';
+
+        $AllCurrentSAMLEndpoints = (Get-AdfsRelyingPartyTrust -Name $this.Name).SamlEndpoints;
+        $CurrentSAMLEndpoint = $AllCurrentSAMLEndpoints | Where-Object { $_.Index -eq $this.Index };
+
+        ### Assume that the system is complian, unless one of the specific settings does not match.
+        $Compliance = $true;
+
+        if ($this.Binding -ne $CurrentSAMLEndpoint.Binding) {
+            Write-Verbose -Message 'Binding setting does not match desired configuration.';
+            $Compliance = $false;
+        }
+        if ($this.IsDefault -ne $CurrentSAMLEndpoint.IsDefault) {
+            Write-Verbose -Message 'IsDefault setting does not match desired configuration.';
+            $Compliance = $false;
+        }
+        if ($this.Location -ne $CurrentSAMLEndpoint.Location) {
+            Write-Verbose -Message 'Location Uri setting does not match desired configuration.';
+            $Compliance = $false;
+        }
+        if ($this.Protocol -ne $CurrentSAMLEndpoint.Protocol) {
+            Write-Verbose -Message 'Protocol setting does not match desired configuration.';
+            $Compliance = $false;
+        }
+
+        if ($Compliance) {
+            Write-Verbose -Message 'All SAML Endpoint settings match desired configuration.';
+        }
+        return $Compliance;
+    }
+
+    [void] Set() {
+        Write-Verbose -Message 'Starting setting SAML Endpoint configuration.';
+        $SAMLEndpoint = @{
+            Binding = $this.Binding;
+            Uri = $this.Location;
+            Protocol = $this.Protocol;
+        }
+        if ($this.IsDefault) {
+            $SAMLEndpoint.Add('IsDefault', $this.IsDefault);
+        }
+
+        $ReplacementSAMLEndpoint = New-AdfsSamlEndpoint @SAMLEndpoint;
+
+        $AllNewSAMLEndpoints = @();
+        $AllCurrentSAMLEndpoints = (Get-AdfsRelyingPartyTrust -Name $this.Name).SamlEndpoints;
+        ForEach ($CurrentSAMLEndpoint in $AllCurrentSAMLEndpoints) {
+            If ($CurrentSAMLEndpoint.Index -eq $this.Index) {
+                $AllNewSAMLEndpoints += $ReplacementSAMLEndpoint;
+            } Else {
+                $AllNewSAMLEndpoints += $CurrentSAMLEndpoint;
+            }
+        }
+
+        Set-AdfsRelyingPartyTrust -TargetName $this.Name -SamlEndpoint $AllNewSAMLEndpoints;
+        Write-Verbose -Message 'Finished setting ADFS Global Authentication configuration.';
     }
 }
 #endregion
