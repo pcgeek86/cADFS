@@ -492,7 +492,7 @@ class cADFSSamlEndpoint {
     [String] $Location;
 
     ### SAML Protocol that this endpoint implements
-    [DscProperty(Mandatory)]
+    [DscProperty(Key)]
     [SAMLProtocol] $Protocol;
 
     ### Retrieves the current state of the SAML Endpoint of a ADFS Relying Party Trust
